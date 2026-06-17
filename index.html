@@ -1,0 +1,735 @@
+
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>污水处理系统设计方案生成器</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style> body{margin:0} </style>
+</head>
+<body class="bg-slate-50">
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+/* ---------------- 内联图标 ---------------- */
+const Svg = ({ s = 18, cls = "", children }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cls}>{children}</svg>
+);
+const Droplets = (p) => <Svg {...p}><path d="M12 2.7s6.5 6 6.5 10.3a6.5 6.5 0 0 1-13 0C5.5 8.7 12 2.7 12 2.7z" /></Svg>;
+const Play = (p) => <Svg {...p}><polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none" /></Svg>;
+const Database = (p) => <Svg {...p}><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></Svg>;
+const Cpu = (p) => <Svg {...p}><rect x="6" y="6" width="12" height="12" rx="1" /><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3" /></Svg>;
+const Settings = (p) => <Svg {...p}><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" /></Svg>;
+const Alert = (p) => <Svg {...p}><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="13" /><line x1="12" y1="16.3" x2="12" y2="16.3" /></Svg>;
+const Loader = (p) => <Svg {...p} cls={(p.cls || "") + " animate-spin"}><path d="M21 12a9 9 0 1 1-6.2-8.5" /></Svg>;
+const Search = (p) => <Svg {...p}><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16" y2="16" /></Svg>;
+const Download = (p) => <Svg {...p}><path d="M12 3v12" /><path d="M7 11l5 5 5-5" /><path d="M5 21h14" /></Svg>;
+const FileText = (p) => <Svg {...p}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><line x1="9" y1="13" x2="15" y2="13" /><line x1="9" y1="17" x2="15" y2="17" /></Svg>;
+const Code = (p) => <Svg {...p}><polyline points="9 8 5 12 9 16" /><polyline points="15 8 19 12 15 16" /></Svg>;
+const Check = (p) => <Svg {...p}><circle cx="12" cy="12" r="9" /><path d="M8 12l3 3 5-6" /></Svg>;
+const Circ = (p) => <Svg {...p}><circle cx="12" cy="12" r="9" /></Svg>;
+const Zap = (p) => <Svg {...p}><polygon points="13 2 4 14 11 14 11 22 20 10 13 10 13 2" /></Svg>;
+const Filter = (p) => <Svg {...p}><polygon points="3 4 21 4 14 12 14 19 10 21 10 12 3 4" /></Svg>;
+const Chevron = (p) => <Svg {...p}><polyline points="6 9 12 15 18 9" /></Svg>;
+const Save = (p) => <Svg {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></Svg>;
+const Upload = (p) => <Svg {...p}><path d="M5 17v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3" /><path d="M12 15V3" /><path d="M7 8l5-5 5 5" /></Svg>;
+const Reset = (p) => <Svg {...p}><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></Svg>;
+const X = (p) => <Svg {...p}><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></Svg>;
+const Key = (p) => <Svg {...p}><circle cx="8" cy="15" r="5" /><path d="M11.5 11.5L21 2" /><path d="M16 7l3 3M13.5 9.5l3 3" /></Svg>;
+
+/* ---------------- 本地存储 ---------------- */
+const LS_KB = "ww_kb_v1";
+const LS_CFG = "ww_cfg_v1";
+function loadKB() { try { const s = localStorage.getItem(LS_KB); return s ? { ...DEFAULT_KB, ...JSON.parse(s) } : DEFAULT_KB; } catch (e) { return DEFAULT_KB; } }
+function saveKBls(kb) { try { localStorage.setItem(LS_KB, JSON.stringify(kb)); } catch (e) {} }
+function getConfig() { try { const s = localStorage.getItem(LS_CFG); return s ? JSON.parse(s) : { model: "Doubao-Seed-2.0-pro", apiKey: "" }; } catch (e) { return { model: "Doubao-Seed-2.0-pro", apiKey: "" }; } }
+function saveConfigLs(c) { try { localStorage.setItem(LS_CFG, JSON.stringify(c)); } catch (e) {} }
+
+/* =========================================================================
+   默认知识库（注入 AI prompt，可在「知识库管理」编辑/上传，存 localStorage）
+   ========================================================================= */
+const DEFAULT_KB = {
+  globalRules: `你是专业污水处理工艺工程师，负责改良生物接触氧化池的工艺计算、设备选型及电力系统设计。
+
+【强制规则】
+1. 所有计算必须严格参考知识库中的参数规则、公式、参数和取整优先级，完全按文档逻辑分步执行，禁止编造公式、简化步骤或修改取整规则。
+2. 知识库给出取值范围时，可在范围内选取合理值进行设计。
+3. 仅依据知识库与已给定的输入数据计算，禁止使用知识库未提供的行业通用参数。`,
+
+  module1: `模块1--格栅调节池
+一、格栅调节池设计规模与系统总设计规模一致，单位：m³/d
+二、格栅调节池水力停留时间
+1. 取值范围：8～12 h
+2. 计算方式：可在范围内选取合理值进行设计，常用取值为10 h
+3. 有效容积计算公式：V = q × t（q：设计规模 m³/d，t：停留时间 h；计算时需将q转换为 m³/h，即 q ÷ 24）
+三、有效水深与池体尺寸
+1. 有效水深取值范围：1.5～2.5 m，常用取值为2.0 m
+2. 池体平面面积 = 有效容积 ÷ 有效水深；平面尺寸不小于计算面积，长宽比控制在1:1~2:1之间，优先取整数尺寸
+3. 池体总高 = 有效水深 + 超高 + 沉泥区高度；超高固定取0.5 m；沉泥区高度0.5～1.0 m，常用0.5 m
+四、人工格栅设计规则
+格栅选材可检索外部信息，要求过水能力达到停留时间要求即可（多一点没关系），输出时表明尺寸和孔隙大小
+五、污水提升泵选型规则
+1. 流量：水泵额定流量（按运行台数计）应不小于设计日处理水量
+2. 扬程：泵扬程 ≥ 池体总高 + 安全余量（0.5~1.0 m）
+3. 选型优先级：满足扬程与流量前提下，优先选额定功率较低的型号
+4. 运行配置：1用1备
+5. 水泵可选型号参数库：
+①25ZNWQP30-1，30W，最大扬程3.5m，提升2.5m流量15m³/d
+②25ZNWQP60，60W，最大扬程5.5m，提升2.5m流量70m³/d，提升3.5m流量50m³/d
+③DC45E-1260VR，25W，最大扬程6m，提升2.5m流量16m³/d，提升3.5m流量14m³/d
+④DC45E-2490VR，40W，最大扬程9m，提升2.5m流量23m³/d，提升3.5m流量23m³/d
+⑤DC55E-12120VR，54W，最大扬程12m，提升2.5m流量35m³/d，提升3.5m流量32m³/d
+⑥DC55E-24160VR，80W，最大扬程16m，提升2.5m流量46m³/d，提升3.5m流量43m³/d
+⑦DC56E-24140VR，80W，最大扬程14m，提升2.5m流量50m³/d，提升3.5m流量50m³/d
+⑧DC80E-1260VR，80W，最大扬程6m，提升2.5m流量86m³/d，提升3.5m流量76m³/d
+⑨DC80E-24100VR，150W，最大扬程10m，提升2.5m流量144m³/d，提升3.5m流量130m³/d
+⑩DC85E-1280VR，150W，最大扬程8m，提升2.5m流量187m³/d，提升3.5m流量173m³/d
+⑪DC85E-24100VR，200W，最大扬程10m，提升2.5m流量245m³/d，提升3.5m流量230m³/d
+⑫BS3500，36W，最大扬程3.5m，提升2.5m流量36m³/d
+⑬BS4500，48W，最大扬程4m，提升2.5m流量55m³/d，提升3.5m流量23m³/d
+⑭BS6000，72W，最大扬程5m，提升2.5m流量90m³/d，提升3.5m流量66m³/d
+⑮BSS8000，80W，最大扬程5m，提升2.5m流量120m³/d，提升3.5m流量90m³/d
+⑯BS10000，96W，最大扬程4.5m，最大流量100m³/h
+⑰BS120000，105W，最大扬程5m，最大流量120m³/h`,
+
+  module2: `模块2--生物氧化池
+一、输入参数（用户必填）：总设计规模Q(m³/d)、进水COD、进水NH3-N、出水COD、出水NH3-N（mg/L）
+二、固定已知参数（不可修改）
+1. 单个标准生物模方尺寸：1.0m×1.0m×1.2m
+2. 单模块有效体积：1.2 m³
+3. 有效水深：与模块高度一致，固定取值 1.2m
+4. 生物量密度：2.22 kg/m³
+5. 降解速率：COD降解速率 0.15 kg/(kg生物量·d)；NH3-N降解速率 0.015 kg/(kg生物量·d)
+三、核心计算逻辑（严格按顺序）
+步骤1：每日总污染物降解负荷（kg/d）
+  每日需降解COD总量 = Q × (进水COD - 出水COD) ÷ 1000
+  每日需降解NH3-N总量 = Q × (进水NH3-N - 出水NH3-N) ÷ 1000
+步骤2：理论所需生物模块数量（取控制项=较大值）
+  COD理论模方数 = 每日需降解COD总量 ÷ 生物量密度 ÷ COD降解速率 ÷ 单模块有效体积
+  NH3-N理论模方数 = 每日需降解NH3-N总量 ÷ 生物量密度 ÷ NH3-N降解速率 ÷ 单模块有效体积
+  理论基准模方数 = 两者较大值
+步骤3：模块数量规整（固定优先级，不可颠倒，取尽可能小的数量）
+  若 >25个：按4的倍数向上取整，标注「4×n」
+  若 15~25个：可按3的倍数向上取整
+  若 <15个：可按2的倍数向上取整
+  最终取值 N_最终，同步标注系数
+步骤4：水力停留时间HRT（固定公式，不得额外除以有效水深）
+  HRT(h) = (N_最终 × 单模块有效体积) ÷ (Q ÷ 24)
+步骤5：主体结构尺寸
+  池高 = 1.2 × 1.2 = 1.44m，向上取整为 1.5m
+  池长 = 模方列长度 + 1.4m；池宽 = 模方行长度 + 0.4m
+  排布优先方正矩阵并匹配「4×n」，如16个=4×4、20个=4×5、24个=4×6
+四、气泵选型规则
+  气泵气量需 > 「模块数量 × 12 L/min」，满足气量前提下优先选低功率型号
+  电磁气泵参数库：
+  ①HJB-50，30W，30L/min ②HJB-80，48W，50L/min ③HJB-100，65W，80L/min
+  ④HJB-120，80W，90L/min ⑤HJB-150，105W，130L/min ⑥TPS-030，30W，34L/min
+  ⑦TPS-040，40W，60L/min ⑧TKO-150，110W，170L/min ⑨TKO-200，170W，210L/min
+  ⑩TKO-250，230W，270L/min ⑪TKO-300，220W，370L/min ⑫TKO-400，350W，460L/min ⑬TKO-500，470W，550L/min
+（15kPa气量为准）`,
+
+  module3: `模块3--电力系统
+一、设计原则：由耗能模块、储能模块、发电模块组成，需与水泵、气泵选型结果联动计算
+二、耗能模块（设备总功率）
+  固定功率项：气泵电磁阀64W、控制系统40W
+  联动功率项：气泵功率（生物池选型）、水泵功率（格栅池选型）
+  设备总功率 = 气泵功率 + 水泵功率 + 64 + 40 （单位W）
+三、储能模块（锂电池）
+  固定参数：额定电压51.2V；允许放电比例90%；最低供电时长60h；可选单块容量200/150/100/50Ah（优先选大容量）；标准充电电流50A
+  需储能电量(kWh) = 设备总功率 × 60 ÷ 90% ÷ 1000
+  实际储能电量(kWh) = 单块容量 × 电池数量 × 51.2 ÷ 1000
+  选型优先级：优先大容量，实际储能电量 ≥ 需储能电量，电池数量向上取整
+  储能可供时长(h) = (电池总容量 × 90%) ÷ (设备总功率 ÷ 90%)（电池总容量自动×电压换算kWh）
+四、发电模块（光伏系统）
+  设计目标：光伏日发电量满足设备连续72h用电；需发电量(kWh) = 设备总功率 × 72 ÷ 90% ÷ 1000
+  光伏板参数库：
+  ①300W，峰值电压32.2V，1650×992mm ②350W，38.2V，1650×992mm ③400W，30.55V，1722×1134mm
+  ④450W(南通威森)，41.39V，2000×1000mm ⑤450W(浙江迪利)，34.9V，2000×1000mm ⑥500W，38.45V，2278×1134mm
+  ⑦550-1，40.98V，2278×1134mm ⑧550-2，41.31V，2278×1134mm
+  光伏日发电量(kWh) = 峰值功率 × 板数量 × 当地年平均日峰光照时长 × 倾斜比水平辐射量 × 综合系数(0.66)
+  核算规则：①光伏日发电量 ≥ 需发电量；②充满电池天数 = 需储能电量 ÷ 光伏日发电量，强制约束充满电池天数 < 1（要求一天充满）；③光伏板电压需与锂电池系统电压(51.2V)适配
+五、光伏排列与场地面积
+  统一排成1排或2排：光伏板总长度 = 单块板长 × 数量；若总长 ≤ 氧化池平面长 → 1排，否则 → 2排；光伏板总宽 = 单块板宽
+  场地总长 = MAX(氧化池平面长, 光伏板总长) + 0.4m
+  场地总宽 = 氧化池平面宽 + 光伏板总宽 + 1.4m`,
+
+  preamble: `3. 农村生活污水治理技术介绍
+根据村庄布局、人口规模、经济水平、环境敏感程度和地形地貌等特点，选择适宜当地的污水治理模式，应充分借助地理自然条件、环境消纳能力等，结合农田灌溉回用、生态保护修复、环境景观建设，推进污水治理与资源化利用。根据《农村生活污水治理技术指南》（DB53/T 1163—2023），农村生活污水治理的推荐技术有化粪池、稳定塘、人工湿地、土地处理、生物接触氧化、曝气生物滤池、膜生物反应器技术。
+
+3.5 改良生物接触氧化工艺
+为汲取生物接触氧化优点、克服其缺点，提出一种改良生物接触氧化工艺。该工艺属于将生物膜法和活性污泥法相结合的新型污水处理工艺：一方面以填料为核心，定向负载生物强化功能菌剂，并通过改进曝气流态形成纵向环流结构，克服易堵塞、传质效率低、处理效率差等缺点；另一方面保留运转灵活、处理高效的活性污泥法。技术关键点为：生物强化功能菌剂、固定化三维填料、纵向环流传质反应。
+功能菌剂富含变形菌、拟杆菌、芽单胞菌门、亚硝化菌、硝化菌等多种污水功能菌群，可提高功能菌群丰度，显著提高系统处理能力和运行稳定性。固定化三维填料为新型高分子密实多孔生物帘，纵向悬挂，生物相容性好、负载量大、不易脱落、寿命长。纵向环流传质利用悬挂填料、围板及池底曝气器改变曝气流态，使污水形成纵向环流，提高与生物膜接触效率。
+优点：微生物截留快、负载量大、不堵塞、反应高效，兼具活性污泥法与生物膜法优点，抗冲击负荷强、泥龄长、剩余污泥少。适用于有一定经济承受能力、处理规模为多户或村落的污水处理站。
+
+4. 技术选择
+对于污水集中收集、环境保护要求较高、对出水效果有要求的村庄，推荐生物处理工艺。MBR 和曝气生物滤池建设及运行费用较高且需反冲洗。改良生物接触氧化工艺克服了填料堵塞、曝气不均匀、传质效率低的缺点，抗冲击负荷强且运行稳定。综上，本方案推荐主体工艺采用改良接触氧化工艺。
+
+4.1 工艺流程
+污水 → 格栅 + 调节池 → 改良生物接触氧化池 → 消毒 → 出水（农田灌溉）`,
+};
+
+const KB_SECTIONS = [
+  { key: "globalRules", label: "全局强制规则", Icon: Settings, desc: "注入每一次 AI 计算的总则" },
+  { key: "module1", label: "模块1 · 格栅调节池", Icon: Filter, desc: "停留时间 / 尺寸 / 提升泵选型" },
+  { key: "module2", label: "模块2 · 生物氧化池", Icon: Droplets, desc: "降解负荷 / 模块数 / 气泵选型" },
+  { key: "module3", label: "模块3 · 电力系统", Icon: Zap, desc: "储能 / 光伏 / 场地尺寸" },
+  { key: "preamble", label: "前置模板 · 技术介绍", Icon: FileText, desc: "直接插入文档的说明性内容" },
+];
+
+/* =========================================================================
+   AI 调用入口 —— 走自己的 /api/chat 代理（火山方舟 OpenAI 兼容）
+   key 从 localStorage 读取，随请求头透传，不写死在代码里
+   ========================================================================= */
+async function callAI({ system, user }) {
+  const cfg = getConfig();
+  if (!cfg.apiKey) throw new Error("尚未配置 API Key，请点右上角「设置」填入。");
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-ark-key": cfg.apiKey },
+    body: JSON.stringify({
+      model: cfg.model,
+      messages: [{ role: "user", content: `${system}\n\n${user}` }],
+      temperature: 0.2,
+      max_tokens: 4096,
+    }),
+  });
+  let data;
+  try { data = await res.json(); } catch (e) { throw new Error(`接口返回异常（${res.status}）`); }
+  if (!res.ok) throw new Error(data?.error?.message || data?.message || `接口错误 ${res.status}`);
+  const text = data?.choices?.[0]?.message?.content || "";
+  if (!text) throw new Error("模型返回为空，请检查模型 ID 是否正确");
+  return text;
+}
+
+function extractJSON(text) {
+  let t = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+  const s = t.indexOf("{");
+  if (s === -1) throw new Error("未找到 JSON");
+  let depth = 0, end = -1;
+  for (let i = s; i < t.length; i++) {
+    if (t[i] === "{") depth++;
+    else if (t[i] === "}") { depth--; if (depth === 0) { end = i; break; } }
+  }
+  let body = end !== -1 ? t.slice(s, end + 1) : t.slice(s);
+  body = body.replace(/,\s*([}\]])/g, "$1");
+  return JSON.parse(body);
+}
+
+async function callAIJSON(promptObj, { retries = 1 } = {}) {
+  let lastRaw = "";
+  for (let i = 0; i <= retries; i++) {
+    const user = i === 0 ? promptObj.user
+      : promptObj.user + `\n\n注意：上次输出无法解析为 JSON。请只输出一个严格合法的 JSON 对象，不要任何其他文字，也不要代码块标记。`;
+    lastRaw = await callAI({ system: promptObj.system, user });
+    try { return { json: extractJSON(lastRaw), raw: lastRaw }; } catch (e) {}
+  }
+  const err = new Error("AI 返回无法解析为 JSON");
+  err.raw = lastRaw;
+  throw err;
+}
+
+async function fetchSolarData(area) {
+  const system = `你是光伏系统数据助手，熟悉中国各地太阳能资源。`;
+  const user = `请给出中国"${area}"用于光伏系统设计的两个参数：
+1) 年平均日峰光照时长（峰值日照小时数 PSH，单位 h/天，中国常见范围约 2.5~6）
+2) 倾斜比水平辐射量（最佳倾角面相对水平面的年辐射增益比，通常约 1.0~1.3）
+仅返回严格 JSON：{"peakSunHours":数字,"tiltRatio":数字,"dataSource":"来源或依据简述"}`;
+  const raw = await callAI({ system, user });
+  const j = extractJSON(raw);
+  if (typeof j.peakSunHours !== "number" || typeof j.tiltRatio !== "number") throw new Error("光照数据格式异常");
+  if (!j.dataSource) j.dataSource = "模型估算";
+  return j;
+}
+
+/* ---------- prompts ---------- */
+function promptM1(kb, p) {
+  return {
+    system: `${kb.globalRules}\n\n【知识库·格栅调节池】\n${kb.module1}`,
+    user: `已知输入：总设计规模Q = ${p.Q} m³/d。
+请严格按知识库分步计算，仅返回如下 JSON（不要任何解释、不要 markdown 代码块）：
+{"designFlow":数字,"hrt":数字,"effectiveVolume":数字,"effectiveDepth":数字,"planArea":数字,"length":数字,"width":数字,"totalHeight":数字,"grilleSize":"字符串","grilleGap":"栅隙字符串","grilleMaterial":"材质","pumpModel":"字符串","pumpPowerW":数字,"pumpHead":"最大扬程字符串","pumpFlow":"对应提升流量字符串","pumpConfig":"1用1备","calcNote":"一句话关键中间值"}`,
+  };
+}
+function promptM2(kb, p) {
+  return {
+    system: `${kb.globalRules}\n\n【知识库·生物氧化池】\n${kb.module2}`,
+    user: `已知输入：Q=${p.Q} m³/d，进水COD=${p.codIn} mg/L，进水NH3-N=${p.nhIn} mg/L，出水COD=${p.codOut} mg/L，出水NH3-N=${p.nhOut} mg/L。
+请严格按知识库步骤1-5计算，仅返回如下 JSON（不要解释、不要代码块）：
+{"codLoad":数字,"nh3nLoad":数字,"codModules":数字,"nh3nModules":数字,"baseModules":数字,"finalModules":整数,"moduleFactor":"如4×n","arrangement":"行×列","hrt":数字,"poolLength":数字,"poolWidth":数字,"poolHeight":数字,"effectiveDepth":1.2,"bioModuleSize":"1.0×1.0×1.2m","bioModuleCount":数字,"blowerModel":"字符串","blowerPowerW":数字,"blowerFlow":"额定流量字符串","blowerCount":数字,"calcNote":"一句话关键中间值含控制项"}`,
+  };
+}
+function promptM3(kb, p, m1, m2) {
+  return {
+    system: `${kb.globalRules}\n\n【知识库·电力系统】\n${kb.module3}`,
+    user: `已知联动参数（均已确定，直接使用）：
+- 水泵额定功率 = ${m1.pumpPowerW} W
+- 气泵额定功率 = ${m2.blowerPowerW} W
+- 氧化池平面长 = ${m2.poolLength} m，氧化池平面宽 = ${m2.poolWidth} m
+- 当地年平均日峰光照时长 = ${p.peakSunHours} h，倾斜比水平辐射量 = ${p.tiltRatio}
+
+请严格按知识库依次计算：
+(1) 设备总功率 = 气泵功率 + 水泵功率 + 64 + 40
+(2) 储能模块：需储能电量(kWh)=设备总功率×60÷0.9÷1000；优先选 200Ah，电池数量向上取整使 实际储能电量(=容量×数量×51.2÷1000) ≥ 需储能电量
+(3) 发电模块：需发电量(kWh)=设备总功率×72÷0.9÷1000；从板库选一种型号，逐步增加板数量，直到 光伏日发电量(=峰值功率×板数×日峰光照×倾斜比×0.66) ≥ 需发电量 且 充满电池天数(=需储能电量÷光伏日发电量) < 1；电压尽量适配 51.2V 系统
+(4) 光伏排列与场地：光伏板总长=单块板长×数量；总长≤氧化池平面长→1排，否则→2排；场地总长=MAX(氧化池平面长,光伏板总长)+0.4；场地总宽=氧化池平面宽+光伏板总宽+1.4
+
+仅返回如下严格 JSON（不要解释、不要代码块）：
+{"totalPowerW":数字,"reqStorageKWh":数字,"battCapacity":"如200Ah","battCount":数字,"actualStorageKWh":数字,"supplyHours":数字,"reqGenKWh":数字,"panelModel":"字符串","panelPeakW":数字,"panelCount":数字,"dailyGenKWh":数字,"fullChargeDays":数字,"arrangement":"1排或2排","panelTotalLength":数字,"panelTotalWidth":数字,"siteLength":数字,"siteWidth":数字,"calcNote":"一句话关键中间值"}`,
+  };
+}
+
+/* =========================================================================
+   App
+   ========================================================================= */
+function App() {
+  const [tab, setTab] = useState("generate");
+  const [kb, setKb] = useState(loadKB);
+  const [cfg, setCfg] = useState(getConfig);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const [params, setParams] = useState({
+    area: "云南省昆明市", Q: 50, codIn: 300, nhIn: 45, codOut: 50, nhOut: 5,
+    peakSunHours: "", tiltRatio: "",
+  });
+  const [solarFetching, setSolarFetching] = useState(false);
+  const [solarNote, setSolarNote] = useState("");
+  const [steps, setSteps] = useState([]);
+  const [generating, setGenerating] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [diag, setDiag] = useState(null);
+
+  const persistKb = (next) => { setKb(next); saveKBls(next); };
+  const persistCfg = (next) => { setCfg(next); saveConfigLs(next); };
+  const setStep = (i, status) => setSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, status } : s)));
+
+  const handleFetchSolar = async () => {
+    setSolarFetching(true); setSolarNote("");
+    try {
+      const j = await fetchSolarData(params.area);
+      setParams((p) => ({ ...p, peakSunHours: j.peakSunHours, tiltRatio: j.tiltRatio }));
+      setSolarNote(`已获取 · ${j.dataSource}`);
+    } catch (e) { setSolarNote("获取失败：" + e.message); }
+    setSolarFetching(false);
+  };
+
+  const generate = async () => {
+    if (!getConfig().apiKey) { setError("请先在右上角「设置」中填入 API Key。"); setShowSettings(true); return; }
+    setError(""); setResult(null); setDiag(null); setGenerating(true);
+
+    const needSolar = params.peakSunHours === "" || params.tiltRatio === "" || params.peakSunHours == null || params.tiltRatio == null;
+    const list = [];
+    if (needSolar) list.push({ label: "获取当地光照参数", status: "wait", net: true });
+    list.push(
+      { label: "格栅调节池计算", status: "wait" },
+      { label: "生物氧化池计算", status: "wait" },
+      { label: "电力系统计算", status: "wait" },
+      { label: "整合设计文档", status: "wait" },
+    );
+    setSteps(list);
+
+    let idx = 0;
+    try {
+      let solar = { peakSunHours: params.peakSunHours, tiltRatio: params.tiltRatio, dataSource: "用户手动输入" };
+      if (needSolar) {
+        setStep(idx, "run");
+        try {
+          const j = await fetchSolarData(params.area);
+          solar = { peakSunHours: j.peakSunHours, tiltRatio: j.tiltRatio, dataSource: j.dataSource };
+          setParams((p) => ({ ...p, peakSunHours: j.peakSunHours, tiltRatio: j.tiltRatio }));
+          setStep(idx, "done");
+        } catch (e) {
+          setStep(idx, "err");
+          throw new Error("无法获取当地光照参数。请在上方手动填写「年平均日峰光照时长」和「倾斜比水平辐射量」后重试。");
+        }
+        idx++;
+      }
+      const p = { ...params, peakSunHours: solar.peakSunHours, tiltRatio: solar.tiltRatio };
+
+      setStep(idx, "run");
+      const { json: m1 } = await callAIJSON(promptM1(kb, p));
+      setStep(idx, "done"); idx++;
+
+      setStep(idx, "run");
+      const { json: m2 } = await callAIJSON(promptM2(kb, p));
+      setStep(idx, "done"); idx++;
+
+      setStep(idx, "run");
+      let m3;
+      try { m3 = (await callAIJSON(promptM3(kb, p, m1, m2))).json; }
+      catch (e) {
+        setStep(idx, "err");
+        setDiag({ step: "电力系统计算", raw: e.raw || "（无原始返回）" });
+        throw new Error("电力系统计算返回格式异常，已记录 AI 原始返回供排查。可点「重新生成」重试。");
+      }
+      m3.peakSunHours = solar.peakSunHours; m3.tiltRatio = solar.tiltRatio; m3.dataSource = solar.dataSource;
+      setStep(idx, "done"); idx++;
+
+      setStep(idx, "run");
+      setResult({ params: p, m1, m2, m3, at: new Date() });
+      setStep(idx, "done");
+    } catch (e) {
+      setError(e.message || "生成失败，请重试");
+      setSteps((prev) => prev.map((s) => (s.status === "run" ? { ...s, status: "err" } : s)));
+      if (e.raw) setDiag((d) => d || { step: "计算", raw: e.raw });
+    } finally { setGenerating(false); }
+  };
+
+  const exportWord = () => {
+    if (!result) return;
+    const html = buildWordHTML(result, kb);
+    const blob = new Blob(["\ufeff", html], { type: "application/msword" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "污水处理系统设计方案.doc";
+    a.rel = "noopener";
+    a.style.display = "none";
+    document.body.appendChild(a);              // 必须挂到 DOM，部分浏览器才会触发下载
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000); // 延迟回收，避免下载未开始就被取消
+  };
+
+  const openPrint = () => {
+    if (!result) return;
+    const html = buildWordHTML(result, kb);
+    const w = window.open("", "_blank");
+    if (!w) { alert("浏览器拦截了新窗口。请允许弹窗后重试，或直接点「导出 Word」下载。"); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
+
+  const configured = !!cfg.apiKey;
+
+  return (
+    <div className="min-h-screen text-slate-800">
+      <div className="bg-gradient-to-r from-teal-700 to-cyan-700 text-white">
+        <div className="max-w-5xl mx-auto px-6 py-5 flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center"><Droplets s={24} /></div>
+          <div className="flex-1">
+            <h1 className="text-xl font-bold tracking-tight">污水处理系统设计方案生成器</h1>
+            <p className="text-teal-100 text-sm">清研环境科技股份有限公司 · 改良生物接触氧化工艺</p>
+          </div>
+          <button onClick={() => setShowSettings(true)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition ${configured ? "bg-white/15 hover:bg-white/25" : "bg-amber-400 text-amber-950 hover:bg-amber-300"}`}>
+            <Settings s={15} /> {configured ? "设置" : "请先配置"}
+          </button>
+        </div>
+        <div className="max-w-5xl mx-auto px-6 flex gap-1">
+          {[{ k: "generate", label: "方案生成", Icon: Play }, { k: "kb", label: "知识库管理", Icon: Database }].map(({ k, label, Icon }) => (
+            <button key={k} onClick={() => setTab(k)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg transition ${tab === k ? "bg-slate-50 text-teal-700" : "text-teal-50 hover:bg-white/10"}`}>
+              <Icon s={16} /> {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-6 py-6">
+        {tab === "generate" ? (
+          <GeneratePanel params={params} setParams={setParams} steps={steps} generating={generating}
+            generate={generate} result={result} error={error} diag={diag} exportWord={exportWord} openPrint={openPrint} kb={kb}
+            solarFetching={solarFetching} solarNote={solarNote} handleFetchSolar={handleFetchSolar} />
+        ) : (
+          <KbPanel kb={kb} persistKb={persistKb} />
+        )}
+      </div>
+
+      <div className="max-w-5xl mx-auto px-6 pb-8 text-xs text-slate-400 flex items-center gap-2">
+        <Cpu s={13} /> 模型：{cfg.model || "未设置"} · 经 /api/chat 代理调用火山方舟，API Key 仅存于本浏览器。
+      </div>
+
+      {showSettings && <SettingsModal cfg={cfg} onSave={persistCfg} onClose={() => setShowSettings(false)} />}
+    </div>
+  );
+}
+
+/* ---------------- 设置弹窗 ---------------- */
+function SettingsModal({ cfg, onSave, onClose }) {
+  const [model, setModel] = useState(cfg.model || "");
+  const [apiKey, setApiKey] = useState(cfg.apiKey || "");
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-slate-800 flex items-center gap-2"><Key s={18} className="text-teal-600" /> 模型设置</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X s={20} /></button>
+        </div>
+        <label className="block text-xs font-medium text-slate-500 mb-1">模型 ID</label>
+        <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="如 doubao-seed-... 或 Doubao-Seed-2.0-pro"
+          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm mb-1 focus:outline-none focus:ring-2 focus:ring-teal-400" />
+        <p className="text-xs text-slate-400 mb-4">若调用报 model not found，请到火山方舟控制台「模型广场 / 开通管理」复制确切的模型 ID 填入。</p>
+
+        <label className="block text-xs font-medium text-slate-500 mb-1">火山方舟 API Key</label>
+        <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="粘贴你的 API Key"
+          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm mb-1 focus:outline-none focus:ring-2 focus:ring-teal-400" />
+        <p className="text-xs text-slate-400 mb-5">Key 仅保存在你当前浏览器（localStorage），经你自己的代理转发，不会发送给除火山方舟以外的第三方。</p>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 border border-slate-300 text-slate-600 text-sm rounded-lg hover:bg-slate-50">取消</button>
+          <button onClick={() => { onSave({ model: model.trim(), apiKey: apiKey.trim() }); onClose(); }}
+            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm rounded-lg flex items-center gap-1.5"><Save s={15} /> 保存</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- 方案生成面板 ---------------- */
+function GeneratePanel({ params, setParams, steps, generating, generate, result, error, diag, exportWord, openPrint, kb, solarFetching, solarNote, handleFetchSolar }) {
+  const upd = (k, v) => setParams((p) => ({ ...p, [k]: v }));
+  const noDegrade = Number(params.codOut) >= Number(params.codIn) || Number(params.nhOut) >= Number(params.nhIn);
+  return (
+    <div className="space-y-5">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <h2 className="font-semibold text-slate-700 mb-4 flex items-center gap-2"><Settings s={17} className="text-teal-600" /> 项目输入参数</h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <Field label="项目地区" hint="光照检索依据" span2>
+            <input className={inputCls} value={params.area} onChange={(e) => upd("area", e.target.value)} placeholder="如 云南省昆明市" />
+          </Field>
+          <NumField label="总设计规模 Q" unit="m³/d" value={params.Q} onChange={(v) => upd("Q", v)} />
+          <NumField label="进水 COD" unit="mg/L" value={params.codIn} onChange={(v) => upd("codIn", v)} />
+          <NumField label="进水 NH₃-N" unit="mg/L" value={params.nhIn} onChange={(v) => upd("nhIn", v)} />
+          <NumField label="出水 COD" unit="mg/L" value={params.codOut} onChange={(v) => upd("codOut", v)} />
+          <NumField label="出水 NH₃-N" unit="mg/L" value={params.nhOut} onChange={(v) => upd("nhOut", v)} />
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between mb-3">
+            <label className="text-xs font-medium text-slate-500">光照参数（光伏计算用）· <span className="text-slate-400 font-normal">留空则生成时自动获取</span></label>
+            <button onClick={handleFetchSolar} disabled={solarFetching}
+              className="text-xs px-2.5 py-1 border border-teal-200 text-teal-700 rounded-md flex items-center gap-1 hover:bg-teal-50 disabled:opacity-50">
+              {solarFetching ? <Loader s={12} /> : <Search s={12} />} 自动获取
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <NumField label="年平均日峰光照时长" unit="h" value={params.peakSunHours} onChange={(v) => upd("peakSunHours", v)} />
+            <NumField label="倾斜比水平辐射量" unit="比值" value={params.tiltRatio} onChange={(v) => upd("tiltRatio", v)} />
+          </div>
+          {solarNote && <div className="mt-2 text-xs text-slate-400 flex items-center gap-1"><Search s={11} /> {solarNote}</div>}
+        </div>
+
+        {noDegrade && <div className="mt-3 text-xs text-amber-600 flex items-center gap-1.5"><Alert s={14} /> 出水浓度不应高于或等于进水浓度，请检查参数。</div>}
+        <button onClick={generate} disabled={generating}
+          className="mt-5 w-full md:w-auto px-6 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition">
+          {generating ? <Loader s={17} /> : <Play s={17} />} {generating ? "正在计算…" : result ? "重新生成" : "生成设计方案"}
+        </button>
+      </div>
+
+      {steps.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <div className="space-y-2.5">
+            {steps.map((s, i) => (
+              <div key={i} className="flex items-center gap-3 text-sm">
+                <StepIcon status={s.status} />
+                <span className={s.status === "done" ? "text-slate-700" : s.status === "err" ? "text-red-600" : s.status === "run" ? "text-teal-700 font-medium" : "text-slate-400"}>{s.label}</span>
+                {s.status === "run" && s.net && <span className="text-xs text-slate-400 flex items-center gap-1"><Search s={12} /> 查询中…</span>}
+              </div>
+            ))}
+          </div>
+          {error && <div className="mt-3 text-sm text-red-600 flex items-start gap-1.5"><Alert s={15} cls="mt-0.5 shrink-0" /> {error}</div>}
+          {diag && (
+            <details className="mt-3 text-xs">
+              <summary className="cursor-pointer text-slate-500 flex items-center gap-1 select-none"><Code s={13} /> 查看「{diag.step}」AI 原始返回（排查用）</summary>
+              <pre className="mt-2 p-3 bg-slate-900 text-slate-200 rounded-lg overflow-x-auto whitespace-pre-wrap max-h-60">{diag.raw}</pre>
+            </details>
+          )}
+        </div>
+      )}
+
+      {result && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50">
+            <span className="text-sm font-medium text-slate-600 flex items-center gap-2"><FileText s={16} /> 设计方案预览</span>
+            <div className="flex items-center gap-2">
+              <button onClick={openPrint} className="px-3.5 py-1.5 border border-slate-300 text-slate-600 text-sm rounded-lg flex items-center gap-1.5 hover:bg-slate-50"><FileText s={15} /> 打印/另存</button>
+              <button onClick={exportWord} className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-sm rounded-lg flex items-center gap-1.5"><Download s={15} /> 导出 Word</button>
+            </div>
+          </div>
+          <DocPreview result={result} kb={kb} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocPreview({ result, kb }) {
+  const { params: p, m1, m2, m3 } = result;
+  return (
+    <div className="p-6 md:p-8 max-h-[600px] overflow-y-auto">
+      <div className="text-center mb-6">
+        <h1 className="text-2xl font-bold text-slate-800">污水处理工程设计方案</h1>
+        <p className="text-slate-500 mt-1">清研环境科技股份有限公司</p>
+      </div>
+      <DocSection n="一" title="项目概况">
+        <KV k="项目名称" v={`${p.area}污水处理工程`} /><KV k="项目性质" v="新建" />
+        <KV k="建设主体单位" v={p.area} /><KV k="项目地点" v={`项目位于${p.area}`} />
+        <KV k="建设内容和规模" v={`总设计规模 Q：${p.Q} m³/d`} />
+      </DocSection>
+      <DocSection n="二" title="进、出水水质论证">
+        <p className="text-sm text-slate-600 leading-relaxed mb-2">农村生活污水排放量采用"人均综合用水量法"计算：Q = n × q × k / 1000（n 为常住人口数，q 为人均日生活用水定额，k 为污水综合排放系数）。本工程按日平均处理规模设计。</p>
+        <div className="grid grid-cols-2 gap-x-6">
+          <KV k="进水 COD" v={`${p.codIn} mg/L`} /><KV k="出水 COD" v={`${p.codOut} mg/L`} />
+          <KV k="进水 NH₃-N" v={`${p.nhIn} mg/L`} /><KV k="出水 NH₃-N" v={`${p.nhOut} mg/L`} />
+        </div>
+      </DocSection>
+      <DocSection n="三" title="农村生活污水治理技术介绍">
+        <details className="text-sm text-slate-600">
+          <summary className="cursor-pointer text-teal-700 select-none">展开技术介绍全文 ▾</summary>
+          <pre className="whitespace-pre-wrap font-sans mt-2 leading-relaxed text-slate-600">{kb.preamble}</pre>
+        </details>
+      </DocSection>
+      <DocSection n="四" title="主要构筑物设计">
+        <SubBlock Icon={Filter} title="（1）格栅调节池" note={m1.calcNote}>
+          <KV k="设计规模" v={`${m1.designFlow} m³/d`} /><KV k="有效水深" v={`${m1.effectiveDepth} m`} />
+          <KV k="停留时间" v={`${m1.hrt} h`} /><KV k="尺寸（长×宽×高）" v={`${m1.length}×${m1.width}×${m1.totalHeight} m`} />
+          <KV k="① 人工格栅" v={`${m1.grilleSize}，栅隙 ${m1.grilleGap}${m1.grilleMaterial ? "，" + m1.grilleMaterial : ""}`} />
+          <KV k="② 污水提升泵" v={`${m1.pumpModel}（${m1.pumpPowerW}W，最大扬程 ${m1.pumpHead}，${m1.pumpConfig}）`} />
+        </SubBlock>
+        <SubBlock Icon={Droplets} title="（2）改良生物接触氧化池" note={m2.calcNote}>
+          <p className="text-xs text-slate-500 leading-relaxed mb-2">池内搭载水质净化模块，上部搭配水生植物营造生态景观，内部集成三维固定化生物帘和一体化曝气系统。好氧环境下污染物与功能菌群接触反应，有机物被氧化降解，氨氮经硝化作用去除。</p>
+          <KV k="设计停留时间" v={`${m2.hrt} h`} /><KV k="尺寸（长×宽×高）" v={`${m2.poolLength}×${m2.poolWidth}×${m2.poolHeight} m`} />
+          <KV k="有效水深" v={`${m2.effectiveDepth} m`} />
+          <KV k="① 生物模块" v={`${m2.bioModuleSize}，共 ${m2.bioModuleCount} 个（${m2.arrangement}，${m2.moduleFactor}）`} />
+          <KV k="② 气泵" v={`${m2.blowerModel}（${m2.blowerFlow}，${m2.blowerPowerW}W，${m2.blowerCount} 台）`} />
+        </SubBlock>
+        <SubBlock Icon={Zap} title="（3）电力系统" note={m3.calcNote}>
+          <KV k="设备总功率" v={`${m3.totalPowerW} W`} />
+          <div className="font-medium text-slate-600 text-sm mt-2 mb-1">① 储能模块（锂电池）</div>
+          <KV k="单块容量 / 数量" v={`${m3.battCapacity} × ${m3.battCount} 块`} />
+          <KV k="实际储能电量" v={`${m3.actualStorageKWh} kWh`} /><KV k="可供设备时长" v={`${m3.supplyHours} h`} />
+          <div className="font-medium text-slate-600 text-sm mt-2 mb-1">② 发电模块（光伏系统）</div>
+          <KV k="光伏板型号 / 数量" v={`${m3.panelModel}（${m3.panelPeakW}W）× ${m3.panelCount} 块`} />
+          <KV k="光伏日发电量" v={`${m3.dailyGenKWh} kWh`} /><KV k="充满电池天数" v={`${m3.fullChargeDays} 天`} />
+          <KV k="光伏板排列方式" v={m3.arrangement} /><KV k="场地总长 × 总宽" v={`${m3.siteLength} × ${m3.siteWidth} m`} />
+          <KV k="采用光照参数" v={`日峰光照 ${m3.peakSunHours} h，倾斜比 ${m3.tiltRatio}（${m3.dataSource || "模型估算"}）`} />
+        </SubBlock>
+      </DocSection>
+    </div>
+  );
+}
+
+/* ---------------- 知识库管理 ---------------- */
+function KbPanel({ kb, persistKb }) {
+  const [open, setOpen] = useState(null);
+  const [draft, setDraft] = useState("");
+  const [savedKey, setSavedKey] = useState("");
+  const fileRef = useRef();
+  const openSection = (key) => { setOpen(key); setDraft(kb[key]); setSavedKey(""); };
+  const save = (key) => { persistKb({ ...kb, [key]: draft }); setSavedKey(key); setTimeout(() => setSavedKey(""), 1800); };
+  const onUpload = (key, file) => { const r = new FileReader(); r.onload = () => setDraft(String(r.result)); r.readAsText(file, "utf-8"); };
+  return (
+    <div className="space-y-3">
+      <div className="bg-teal-50 border border-teal-100 rounded-xl p-4 text-sm text-teal-800 flex items-start gap-2">
+        <Database s={16} cls="mt-0.5 shrink-0" /><span>知识库内容会实时注入 AI 计算 prompt，修改后自动保存在本浏览器并在下次生成时生效。可直接编辑文本，或上传 .txt 文件覆盖。</span>
+      </div>
+      {KB_SECTIONS.map(({ key, label, Icon, desc }) => (
+        <div key={key} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <button onClick={() => (open === key ? setOpen(null) : openSection(key))} className="w-full flex items-center gap-3 px-5 py-4 hover:bg-slate-50 transition text-left">
+            <div className="w-9 h-9 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center shrink-0"><Icon s={18} /></div>
+            <div className="flex-1"><div className="font-medium text-slate-700">{label}</div><div className="text-xs text-slate-400">{desc}</div></div>
+            <Chevron s={18} cls={`text-slate-400 transition ${open === key ? "rotate-180" : ""}`} />
+          </button>
+          {open === key && (
+            <div className="px-5 pb-5 border-t border-slate-100">
+              <textarea value={draft} onChange={(e) => setDraft(e.target.value)} spellCheck={false}
+                className="w-full h-72 mt-4 p-3 text-xs font-mono leading-relaxed border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-400 resize-y" />
+              <div className="flex flex-wrap items-center gap-2 mt-3">
+                <button onClick={() => save(key)} className="px-4 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-sm rounded-lg flex items-center gap-1.5"><Save s={14} /> 保存</button>
+                <button onClick={() => { fileRef.current.dataset.key = key; fileRef.current.click(); }} className="px-4 py-1.5 border border-slate-300 text-slate-600 text-sm rounded-lg flex items-center gap-1.5 hover:bg-slate-50"><Upload s={14} /> 上传 .txt 覆盖</button>
+                <button onClick={() => setDraft(DEFAULT_KB[key])} className="px-4 py-1.5 border border-slate-300 text-slate-600 text-sm rounded-lg flex items-center gap-1.5 hover:bg-slate-50"><Reset s={14} /> 恢复默认</button>
+                {savedKey === key && <span className="text-sm text-teal-600 flex items-center gap-1"><Check s={15} /> 已保存</span>}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+      <input ref={fileRef} type="file" accept=".txt,.md" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(fileRef.current.dataset.key, f); e.target.value = ""; }} />
+    </div>
+  );
+}
+
+/* ---------------- 小组件 ---------------- */
+const inputCls = "w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-400";
+function Field({ label, hint, span2, children }) {
+  return (<div className={span2 ? "col-span-2 md:col-span-1" : ""}>
+    <label className="block text-xs font-medium text-slate-500 mb-1">{label} {hint && <span className="text-slate-400 font-normal">· {hint}</span>}</label>{children}
+  </div>);
+}
+function NumField({ label, unit, value, onChange }) {
+  return (<Field label={label}><div className="relative">
+    <input type="number" className={inputCls + " pr-16"} value={value} onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))} />
+    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">{unit}</span>
+  </div></Field>);
+}
+function StepIcon({ status }) {
+  if (status === "done") return <Check s={18} cls="text-teal-600 shrink-0" />;
+  if (status === "run") return <Loader s={18} cls="text-teal-600 shrink-0" />;
+  if (status === "err") return <Alert s={18} cls="text-red-500 shrink-0" />;
+  return <Circ s={18} cls="text-slate-300 shrink-0" />;
+}
+function DocSection({ n, title, children }) {
+  return (<div className="mb-6"><h2 className="text-base font-bold text-slate-800 border-l-4 border-teal-600 pl-3 mb-3">{n}、{title}</h2><div className="pl-3">{children}</div></div>);
+}
+function SubBlock({ Icon, title, note, children }) {
+  return (<div className="mb-4 bg-slate-50 rounded-lg p-4">
+    <div className="flex items-center gap-2 mb-2"><Icon s={16} cls="text-teal-600" /><h3 className="font-semibold text-slate-700 text-sm">{title}</h3></div>
+    {children}{note && <div className="mt-2 text-xs text-slate-400 border-t border-slate-200 pt-2">计算摘要：{note}</div>}
+  </div>);
+}
+function KV({ k, v }) {
+  return (<div className="flex text-sm py-0.5"><span className="text-slate-500 shrink-0 w-36">{k}</span><span className="text-slate-800 font-medium">{v}</span></div>);
+}
+
+/* ---------------- Word 导出 ---------------- */
+function buildWordHTML(result, kb) {
+  const { params: p, m1, m2, m3 } = result;
+  const row = (k, v) => `<tr><td style="width:30%;background:#f5f7f8;padding:6px 10px;border:1px solid #d8dee2;">${k}</td><td style="padding:6px 10px;border:1px solid #d8dee2;">${v}</td></tr>`;
+  const table = (rows) => `<table style="border-collapse:collapse;width:100%;margin:8px 0;font-size:11pt;">${rows}</table>`;
+  const h2 = (t) => `<h2 style="font-size:14pt;border-left:4px solid #0d9488;padding-left:8px;margin-top:18px;">${t}</h2>`;
+  const h3 = (t) => `<h3 style="font-size:12pt;margin-top:12px;">${t}</h3>`;
+  const power = table(
+    row("设备总功率", `${m3.totalPowerW} W`) + row("① 储能模块 单块容量/数量", `${m3.battCapacity} × ${m3.battCount} 块`) +
+    row("实际储能电量", `${m3.actualStorageKWh} kWh`) + row("可供设备时长", `${m3.supplyHours} h`) +
+    row("② 发电模块 光伏板型号/数量", `${m3.panelModel}（${m3.panelPeakW}W）× ${m3.panelCount} 块`) +
+    row("光伏日发电量", `${m3.dailyGenKWh} kWh`) + row("充满电池天数", `${m3.fullChargeDays} 天`) +
+    row("光伏板排列方式", m3.arrangement) + row("场地总长 × 总宽", `${m3.siteLength} × ${m3.siteWidth} m`) +
+    row("采用光照参数", `日峰光照 ${m3.peakSunHours} h；倾斜比 ${m3.tiltRatio}（${m3.dataSource || "模型估算"}）`)
+  );
+  return `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head><meta charset='utf-8'><title>污水处理系统设计方案</title></head>
+<body style="font-family:'宋体',SimSun,serif;font-size:11pt;line-height:1.7;color:#222;">
+<h1 style="text-align:center;font-size:20pt;">污水处理工程设计方案</h1>
+<p style="text-align:center;color:#555;">清研环境科技股份有限公司</p>
+${h2("一、项目概况")}
+${table(row("项目名称", `${p.area}污水处理工程`) + row("项目性质", "新建") + row("建设主体单位", p.area) + row("项目地点", `项目位于${p.area}`) + row("建设内容和规模", `总设计规模 Q：${p.Q} m³/d`))}
+${h2("二、进、出水水质论证")}
+<p>农村生活污水排放量采用"人均综合用水量法"计算：Q = n × q × k / 1000（n 为常住人口数，q 为人均日生活用水定额，k 为污水综合排放系数）。本工程按日平均处理规模设计。</p>
+${table(row("进水 COD", `${p.codIn} mg/L`) + row("出水 COD", `${p.codOut} mg/L`) + row("进水 NH₃-N", `${p.nhIn} mg/L`) + row("出水 NH₃-N", `${p.nhOut} mg/L`))}
+${h2("三、农村生活污水治理技术介绍")}
+<div style="white-space:pre-wrap;">${kb.preamble.replace(/</g, "&lt;")}</div>
+${h2("四、主要构筑物设计")}
+${h3("（1）格栅调节池")}
+${table(row("设计规模", `${m1.designFlow} m³/d`) + row("有效水深", `${m1.effectiveDepth} m`) + row("停留时间", `${m1.hrt} h`) + row("尺寸（长×宽×高）", `${m1.length}×${m1.width}×${m1.totalHeight} m`) + row("① 人工格栅", `${m1.grilleSize}，栅隙 ${m1.grilleGap}${m1.grilleMaterial ? "，" + m1.grilleMaterial : ""}`) + row("② 污水提升泵", `${m1.pumpModel}（${m1.pumpPowerW}W，最大扬程 ${m1.pumpHead}，${m1.pumpConfig}）`))}
+${h3("（2）改良生物接触氧化池")}
+<p>池内搭载水质净化模块，上部搭配水生植物营造生态景观，内部集成三维固定化生物帘和一体化曝气系统。好氧环境下污染物与功能菌群接触反应，有机物被氧化降解，氨氮经硝化作用去除。</p>
+${table(row("设计停留时间", `${m2.hrt} h`) + row("尺寸（长×宽×高）", `${m2.poolLength}×${m2.poolWidth}×${m2.poolHeight} m`) + row("有效水深", `${m2.effectiveDepth} m`) + row("① 生物模块", `${m2.bioModuleSize}，共 ${m2.bioModuleCount} 个（${m2.arrangement}，${m2.moduleFactor}）`) + row("② 气泵", `${m2.blowerModel}（${m2.blowerFlow}，${m2.blowerPowerW}W，${m2.blowerCount} 台）`))}
+${h3("（3）电力系统")}
+${power}
+</body></html>`;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
